@@ -22,7 +22,7 @@ function varargout = celestina(varargin)
 
 % Edit the above text to modify the response to help celestina
 
-% Last Modified by GUIDE v2.5 10-Feb-2017 20:04:56
+% Last Modified by GUIDE v2.5 23-Feb-2017 18:11:31
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -54,7 +54,7 @@ function celestina_OpeningFcn(hObject, eventdata, handles, varargin)
 
 % Choose default command line output for celestina
 handles.output = hObject;
-handles.ticks = [handles.cross_corr, handles.time_ax,...
+handles.ticks = [handles.waveforms_ax,handles.cross_corr, handles.time_ax,...
     handles.heat_a,handles.heat_b,handles.heat_c,handles.waveforms_ax,...
     handles.isi_c,handles.isi_a,handles.isi_b,handles.peak_distr,handles.cs_ix];
 
@@ -105,7 +105,9 @@ function load_gui_b_Callback(hObject, eventdata, handles)
     h_fig = findobj(h_figs,'tag','wave_clus_figure');
     USER_DATA = get(h_fig,'userdata');
 %     wc_handles = guidata(h_fig);
-    
+    if isempty(USER_DATA)
+        set(handles.name_label,'String','Wave_clus GUI not found')
+    end
     handles.classes = USER_DATA{6};
     handles.forced = USER_DATA{13};  
     handles.spikes = USER_DATA{2};
@@ -128,7 +130,8 @@ function ca_pm_Callback(hObject, eventdata, handles)
 for i = handles.ticks
 	cla(i)
 end
-
+legend(handles.waveforms_ax,'hide')
+legend(handles.cs_ix,'hide')
 
 % --- Executes during object creation, after setting all properties.
 function ca_pm_CreateFcn(hObject, eventdata, handles)
@@ -244,6 +247,9 @@ function plot_b_Callback(hObject, eventdata, handles)
 
     ca = str2num(contents{get(handles.ca_pm,'Value')});
     cb = str2num(contents{get(handles.cb_pm,'Value')});
+    handles.ca = ca;
+    handles.cb = cb;
+    
     sp_a = handles.classes == ca;
     sp_b = handles.classes == cb;
     sp_c = handles.classes  == ca | handles.classes == cb;
@@ -269,29 +275,7 @@ function plot_b_Callback(hObject, eventdata, handles)
     legend(handles.waveforms_ax,p,['C:' num2str(ca)],['C:' num2str(cb)],'Merge','Location','Best')
     xlim(handles.waveforms_ax,[1 length(av)]);
     %heat maps
-    lsp = size(sps,2);
-    
-    x = repmat((1:lsp)',nnz(sp_a),1);
-    y = reshape(sps(sp_a,:)',[nnz(sp_a)*lsp,1]);
-    aux = hist3([x,y],[lsp lsp]);
-    colormap(handles.heat_a,'hot')
-    pcolor(handles.heat_a,aux')
-    shading(handles.heat_a,'Flat');%interp
-    
-    x = repmat((1:lsp)',nnz(sp_b),1);
-    y = reshape(sps(sp_b,:)',[nnz(sp_b)*lsp,1]);
-    aux = hist3([x,y],[lsp lsp]);
-    colormap(handles.heat_b,'hot')
-    pcolor(handles.heat_b,aux')
-    shading(handles.heat_b,'Flat');%interp
-    x = repmat((1:lsp)',nnz(sp_c),1);
-    y = reshape(sps(sp_c,:)',[nnz(sp_c)*lsp,1]);
-    aux = hist3([x,y],[lsp lsp]);
-    colormap(handles.heat_c,'hot')
-    pcolor(handles.heat_c,aux')
-    shading(handles.heat_c,'Flat');%interp
-    xlabel(handles.heat_c,'samples')
-%     pcolor(log10(aux'))
+    plot_heatmaps(handles,sps,ca,cb,sp_a,sp_b,sp_c);
 
     %isis
     nbins= 100;
@@ -316,22 +300,13 @@ function plot_b_Callback(hObject, eventdata, handles)
     ylim(handles.isi_c,[0 nmax]);
     xlim(handles.isi_c,[0 nbins]);
     xlabel(handles.isi_c,'ISI (ms)');
-    ylabel(handles.heat_a, ['C:' num2str(ca) ' (#' num2str(nnz(sp_a)) ')'],'fontunits',   'normalized', 'FontSize', 0.10)
-    ylabel(handles.heat_b, ['C:' num2str(cb) ' (#' num2str(nnz(sp_b)) ')'],  'fontunits',   'normalized', 'FontSize', 0.10)
-    ylabel(handles.heat_c, ['Merge (#' num2str(nnz(sp_c)) ')'], 'FontSize', 12)
+
     text(nbins,nmax,[num2str(rc) ' in < 3ms '],'Parent',handles.isi_c,'HorizontalAlignment','right','VerticalAlignment','top')
     text(nbins,nmax,[num2str(rb) ' in < 3ms '],'Parent',handles.isi_b,'HorizontalAlignment','right','VerticalAlignment','top')
     text(nbins,nmax,[num2str(ra) ' in < 3ms '],'Parent',handles.isi_a,'HorizontalAlignment','right','VerticalAlignment','top')
     %time plot
-    cla(handles.time_ax)
-    hold(handles.time_ax,'on')
-    apeak = min(sps(sp_a,:),[],2);
-    plot(handles.time_ax,ix(sp_a),apeak,'.r', 'markersize', 5)
-    bpeak = min(sps(sp_b,:),[],2);
-    plot(handles.time_ax,ix(sp_b),bpeak,'.b', 'markersize', 5)
-    xlabel(handles.time_ax,'time(ms)');
-    xlim(handles.time_ax,[min(ix(sp_c)),max(ix(sp_c)) ]);
-    
+    plot_time(handles,sps,sp_a,sp_b,sp_c,ix)
+        
     %cross correlation
     Na = hist(ix(sp_a),min(ix(sp_c)):2:max(ix(sp_c)));
     Nb = hist(ix(sp_b),min(ix(sp_c)):2:max(ix(sp_c)));
@@ -345,6 +320,8 @@ function plot_b_Callback(hObject, eventdata, handles)
     ylim(handles.cross_corr,[0 yl(2)]);
     
     %peak distribution
+    apeak = min(sps(sp_a,:),[],2);
+    bpeak = min(sps(sp_b,:),[],2);
     max_ap = max(apeak);
     min_ap = min(apeak);
     max_bp = max(bpeak);
@@ -358,9 +335,9 @@ function plot_b_Callback(hObject, eventdata, handles)
     ylabel(handles.peak_distr,'Distrib. of amplitudes' ,'fontunits',   'normalized', 'FontSize', 0.08)
 %     set(handles.peak_distr, 'Color', 'none')
     xlabel(handles.peak_distr,'amplitude')
+    xlim(handles.peak_distr,'auto')
     %cumulative sum
     %
-    ix(sp_b)
     cla(handles.cs_ix)
     hold(handles.cs_ix,'on')
     plot(handles.cs_ix,ix(sp_a),1:nnz(sp_a),'r')
@@ -377,37 +354,24 @@ function plot_b_Callback(hObject, eventdata, handles)
     for i = handles.ticks
         set(i,  'fontunits',   'normalized', 'FontSize', 0.06)
     end
-function popupmenu3_Callback(hObject, eventdata, handles)
-% hObject    handle to popupmenu3 (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
-
-% Hints: contents = cellstr(get(hObject,'String')) returns popupmenu3 contents as cell array
-%        contents{get(hObject,'Value')} returns selected item from popupmenu3
-
+    
+function heat_scale_pm_Callback(hObject, eventdata, handles)
+    if isempty(handles.ca)
+        return
+    end
+    sp_a = handles.classes == ca;
+    sp_b = handles.classes == cb;
+    sp_c = handles.classes  == ca | handles.classes == cb;
+    sps = handles.spikes;
+    plot_heatmaps(handles,sps,handles.ca,handles.cb,sp_a,sp_b,sp_c)
 
 % --- Executes during object creation, after setting all properties.
-function popupmenu3_CreateFcn(hObject, eventdata, handles)
-% hObject    handle to popupmenu3 (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    empty - handles not created until after all CreateFcns called
-
+function heat_scale_pm_CreateFcn(hObject, eventdata, handles)
 % Hint: popupmenu controls usually have a white background on Windows.
 %       See ISPC and COMPUTER.
 if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor','white');
 end
-
-
-% --- Executes on selection change in popupmenu4.
-function popupmenu4_Callback(hObject, eventdata, handles)
-% hObject    handle to popupmenu4 (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
-
-% Hints: contents = cellstr(get(hObject,'String')) returns popupmenu4 contents as cell array
-%        contents{get(hObject,'Value')} returns selected item from popupmenu4
-
 
 % --- Executes during object creation, after setting all properties.
 function popupmenu4_CreateFcn(hObject, eventdata, handles)
@@ -422,19 +386,21 @@ if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgr
 end
 
 
-% --- Executes on selection change in popupmenu5.
-function popupmenu5_Callback(hObject, eventdata, handles)
-% hObject    handle to popupmenu5 (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
+% --- Executes on selection change in time_plot_pm.
+function time_plot_pm_Callback(hObject, eventdata, handles)
+    if isempty(handles.ca)
+        return
+    end
+    sp_a = handles.classes == handles.ca;
+    sp_b = handles.classes == handles.cb;
+    sp_c = handles.classes  == handles.ca | handles.classes == handles.cb;
+    plot_time(handles,handles.spikes,sp_a,sp_b,sp_c,handles.index)
 
-% Hints: contents = cellstr(get(hObject,'String')) returns popupmenu5 contents as cell array
-%        contents{get(hObject,'Value')} returns selected item from popupmenu5
-
+    
 
 % --- Executes during object creation, after setting all properties.
-function popupmenu5_CreateFcn(hObject, eventdata, handles)
-% hObject    handle to popupmenu5 (see GCBO)
+function time_plot_pm_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to time_plot_pm (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    empty - handles not created until after all CreateFcns called
 
@@ -458,7 +424,8 @@ function update_figure(h)
     end
     legend(h.waveforms_ax,'hide')
     legend(h.cs_ix,'hide')
-    
+    handles.ca = [];
+    handles.cb = [];
 % --- Executes on button press in load_b.
 function load_b_Callback(hObject, eventdata, handles)
 % hObject    handle to load_b (see GCBO)
@@ -542,3 +509,69 @@ function popupmenu6_CreateFcn(hObject, eventdata, handles)
 if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor','white');
 end
+
+function plot_time(handles,sps,sp_a,sp_b,sp_c,ix)
+    contents = cellstr(get(handles.time_plot_pm,'String'));% returns heat_scale_pm contents as cell array
+    valuetype = contents{get(handles.time_plot_pm,'Value')}; %returns selected item from heat_scale_pm
+    
+    cla(handles.time_ax)
+    hold(handles.time_ax,'on')
+    
+   switch valuetype
+   case 'min'
+        apeak = min(sps(sp_a,:),[],2);
+        bpeak = min(sps(sp_b,:),[],2);
+   case 'max'
+        apeak = max(sps(sp_a,:),[],2);
+        bpeak = max(sps(sp_b,:),[],2);
+   case 'ptp'
+        apeak = max(sps(sp_a,:),[],2)-min(sps(sp_a,:),[],2);
+        bpeak = max(sps(sp_b,:),[],2)-min(sps(sp_b,:),[],2);       
+   end
+    
+    
+    plot(handles.time_ax,ix(sp_a),apeak,'.r', 'markersize', 5)
+    plot(handles.time_ax,ix(sp_b),bpeak,'.b', 'markersize', 5)
+    xlabel(handles.time_ax,'time(ms)','fontunits',   'normalized', 'FontSize', 0.08);
+    xlim(handles.time_ax,[min(ix(sp_c)), max(ix(sp_c))]);
+    
+function plot_heatmaps(handles,sps,ca,cb,sp_a,sp_b,sp_c)
+%heat maps
+    contents = cellstr(get(handles.heat_scale_pm,'String'));% returns heat_scale_pm contents as cell array
+    islog = strcmp(contents{get(handles.heat_scale_pm,'Value')},'Log'); %returns selected item from heat_scale_pm
+    
+    lsp = size(sps,2);
+    x = repmat((1:lsp)',nnz(sp_a),1);
+    y = reshape(sps(sp_a,:)',[nnz(sp_a)*lsp,1]);
+    aux = hist3([x,y],[lsp lsp]);
+    if islog
+        aux=log10(aux+1);
+    end
+    colormap(handles.heat_a,'hot')
+    pcolor(handles.heat_a,aux')
+    shading(handles.heat_a,'Flat');%interp
+    
+    x = repmat((1:lsp)',nnz(sp_b),1);
+    y = reshape(sps(sp_b,:)',[nnz(sp_b)*lsp,1]);
+    aux = hist3([x,y],[lsp lsp]);
+    if islog
+        aux=log10(aux+1);
+    end
+    colormap(handles.heat_b,'hot')
+    pcolor(handles.heat_b,aux')
+    shading(handles.heat_b,'Flat');%interp
+    x = repmat((1:lsp)',nnz(sp_c),1);
+    y = reshape(sps(sp_c,:)',[nnz(sp_c)*lsp,1]);
+    aux = hist3([x,y],[lsp lsp]);
+    if islog
+        aux=log10(aux+1);
+    end
+    colormap(handles.heat_c,'hot')
+    pcolor(handles.heat_c,aux')
+    shading(handles.heat_c,'Flat');%interp
+    xlabel(handles.heat_c,'samples')
+    
+    ylabel(handles.heat_a, ['C:' num2str(ca) ' (#' num2str(nnz(sp_a)) ')'],'fontunits',   'normalized', 'FontSize', 0.10)
+    ylabel(handles.heat_b, ['C:' num2str(cb) ' (#' num2str(nnz(sp_b)) ')'],  'fontunits',   'normalized', 'FontSize', 0.10)
+    ylabel(handles.heat_c, ['Merge (#' num2str(nnz(sp_c)) ')'], 'FontSize', 12)
+    
