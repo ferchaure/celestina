@@ -308,8 +308,8 @@ function plot_b_Callback(hObject, eventdata, handles)
     plot_time(handles,sps,sp_a,sp_b,sp_c,ix)
         
     %cross correlation
-    Na = hist(ix(sp_a),min(ix(sp_c)):2:max(ix(sp_c)));
-    Nb = hist(ix(sp_b),min(ix(sp_c)):2:max(ix(sp_c)));
+    Na = hist(ix(sp_a),min(ix(sp_c)):10:max(ix(sp_c)));
+    Nb = hist(ix(sp_b),min(ix(sp_c)):10:max(ix(sp_c)));
     maxlag = 400;
     [acor,lag] = xcorr(Na,Nb,maxlag);
     bar(handles.cross_corr,lag,acor,'FaceColor',[0.5,0.25,0.6])
@@ -354,14 +354,15 @@ function plot_b_Callback(hObject, eventdata, handles)
     for i = handles.ticks
         set(i,  'fontunits',   'normalized', 'FontSize', 0.06)
     end
+    guidata(hObject,handles)
     
 function heat_scale_pm_Callback(hObject, eventdata, handles)
     if isempty(handles.ca)
         return
     end
-    sp_a = handles.classes == ca;
-    sp_b = handles.classes == cb;
-    sp_c = handles.classes  == ca | handles.classes == cb;
+    sp_a = handles.classes == handles.ca;
+    sp_b = handles.classes == handles.cb;
+    sp_c = handles.classes  == handles.ca | handles.classes == handles.cb;
     sps = handles.spikes;
     plot_heatmaps(handles,sps,handles.ca,handles.cb,sp_a,sp_b,sp_c)
 
@@ -434,7 +435,11 @@ function load_b_Callback(hObject, eventdata, handles)
     [filename, pathname] = uigetfile('times_*.mat','Select file');
     load([pathname filesep filename],'cluster_class','spikes','forced')
     handles.classes = cluster_class(:,1);
-    handles.forced = forced;  
+    if exist('force','var')
+        handles.forced = forced;  
+    else
+        handles.forced = [];  
+    end
     handles.spikes = spikes;
     handles.index = cluster_class(:,2);
     set(handles.name_label,'String',[pathname filesep filename])
@@ -528,7 +533,6 @@ function plot_time(handles,sps,sp_a,sp_b,sp_c,ix)
         apeak = max(sps(sp_a,:),[],2)-min(sps(sp_a,:),[],2);
         bpeak = max(sps(sp_b,:),[],2)-min(sps(sp_b,:),[],2);       
    end
-    
     
     plot(handles.time_ax,ix(sp_a),apeak,'.r', 'markersize', 5)
     plot(handles.time_ax,ix(sp_b),bpeak,'.b', 'markersize', 5)
