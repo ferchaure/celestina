@@ -57,8 +57,9 @@ handles.output = hObject;
 handles.ticks = [handles.waveforms_ax,handles.cross_corr, handles.time_ax,...
     handles.heat_a,handles.heat_b,handles.heat_c,handles.waveforms_ax,...
     handles.isi_c,handles.isi_a,handles.isi_b,handles.peak_distr,handles.cs_ix];
-
 % Update handles structure
+handles.black_axes = [handles.heat_a,handles.heat_b,handles.heat_c];
+
 guidata(hObject, handles);
 linkaxes([handles.heat_a,handles.heat_b,handles.heat_c],'xy');
 linkaxes([handles.isi_a,handles.isi_b,handles.isi_c],'xy');
@@ -112,6 +113,7 @@ function load_gui_b_Callback(hObject, eventdata, handles)
     handles.forced = USER_DATA{13};  
     handles.spikes = USER_DATA{2};
     handles.index = USER_DATA{3};
+    handles.par = USER_DATA{1};
     set(handles.name_label,'String',[cd filesep USER_DATA{1}.nick_name])
     guidata(hObject,handles)
     update_figure(handles)
@@ -274,6 +276,7 @@ function plot_b_Callback(hObject, eventdata, handles)
     plot(handles.waveforms_ax,av-sd,':k','linewidth',1);
     legend(handles.waveforms_ax,p,['C:' num2str(ca)],['C:' num2str(cb)],'Merge','Location','Best')
     xlim(handles.waveforms_ax,[1 length(av)]);
+
     %heat maps
     plot_heatmaps(handles,sps,ca,cb,sp_a,sp_b,sp_c);
 
@@ -297,7 +300,9 @@ function plot_b_Callback(hObject, eventdata, handles)
     [N,X]=hist(times,0:bin_step:nbins);
     bar(handles.isi_c,X(1:end-1),N(1:end-1),'k')
     nmax = max(N(1:end-1));
-    ylim(handles.isi_c,[0 nmax]);
+    if nmax>0
+        ylim(handles.isi_c,[0 nmax]);
+    end
     xlim(handles.isi_c,[0 nbins]);
     xlabel(handles.isi_c,'ISI (ms)');
 
@@ -320,8 +325,15 @@ function plot_b_Callback(hObject, eventdata, handles)
     ylim(handles.cross_corr,[0 yl(2)]);
     
     %peak distribution
-    apeak = min(sps(sp_a,:),[],2);
-    bpeak = min(sps(sp_b,:),[],2);
+    if strcmp(handles.par.detection,'both') || any(isnan(handles.par.detection))
+    	peak = @(x) max(abs(x),[],2);
+    elseif strcmp(handles.par.detection,'neg')
+        peak = @(x) max(x,[],2);
+    elseif strcmp(handles.par.detection,'pos')
+        peak = @(x) min(x,[],2);
+    end
+    apeak = peak(sps(sp_a,:));
+    bpeak = peak(sps(sp_b,:));
     max_ap = max(apeak);
     min_ap = min(apeak);
     max_bp = max(bpeak);
@@ -337,7 +349,6 @@ function plot_b_Callback(hObject, eventdata, handles)
     xlabel(handles.peak_distr,'amplitude')
     xlim(handles.peak_distr,'auto')
     %cumulative sum
-    %
     cla(handles.cs_ix)
     hold(handles.cs_ix,'on')
     plot(handles.cs_ix,ix(sp_a),1:nnz(sp_a),'r')
@@ -433,7 +444,10 @@ function load_b_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
     [filename, pathname] = uigetfile('times_*.mat','Select file');
-    load([pathname filesep filename],'cluster_class','spikes','forced')
+    if isempty(filename)
+        return
+    end
+    load([pathname filesep filename],'cluster_class','spikes','forced','par')
     handles.classes = cluster_class(:,1);
     if exist('force','var')
         handles.forced = forced;  
@@ -442,6 +456,7 @@ function load_b_Callback(hObject, eventdata, handles)
     end
     handles.spikes = spikes;
     handles.index = cluster_class(:,2);
+    handles.par = par;
     set(handles.name_label,'String',[pathname filesep filename])
     guidata(hObject,handles)
     update_figure(handles)
@@ -547,35 +562,36 @@ function plot_heatmaps(handles,sps,ca,cb,sp_a,sp_b,sp_c)
     lsp = size(sps,2);
     x = repmat((1:lsp)',nnz(sp_a),1);
     y = reshape(sps(sp_a,:)',[nnz(sp_a)*lsp,1]);
-    aux = hist3([x,y],[lsp lsp]);
+    [aux,aux_c] = hist3([x,y],[lsp lsp]);
     if islog
         aux=log10(aux+1);
     end
     colormap(handles.heat_a,'hot')
-    pcolor(handles.heat_a,aux')
+    pcolor(handles.heat_a,aux_c{1},aux_c{2},aux')
     shading(handles.heat_a,'Flat');%interp
     
     x = repmat((1:lsp)',nnz(sp_b),1);
     y = reshape(sps(sp_b,:)',[nnz(sp_b)*lsp,1]);
-    aux = hist3([x,y],[lsp lsp]);
+    [aux,aux_c] = hist3([x,y],[lsp lsp]);
     if islog
         aux=log10(aux+1);
     end
     colormap(handles.heat_b,'hot')
-    pcolor(handles.heat_b,aux')
+    pcolor(handles.heat_b,aux_c{1},aux_c{2},aux')
     shading(handles.heat_b,'Flat');%interp
     x = repmat((1:lsp)',nnz(sp_c),1);
     y = reshape(sps(sp_c,:)',[nnz(sp_c)*lsp,1]);
-    aux = hist3([x,y],[lsp lsp]);
+    [aux,aux_c] = hist3([x,y],[lsp lsp]);
     if islog
         aux=log10(aux+1);
     end
     colormap(handles.heat_c,'hot')
-    pcolor(handles.heat_c,aux')
+    pcolor(handles.heat_c,aux_c{1},aux_c{2},aux')
     shading(handles.heat_c,'Flat');%interp
     xlabel(handles.heat_c,'samples')
     
     ylabel(handles.heat_a, ['C:' num2str(ca) ' (#' num2str(nnz(sp_a)) ')'],'fontunits',   'normalized', 'FontSize', 0.10)
     ylabel(handles.heat_b, ['C:' num2str(cb) ' (#' num2str(nnz(sp_b)) ')'],  'fontunits',   'normalized', 'FontSize', 0.10)
     ylabel(handles.heat_c, ['Merge (#' num2str(nnz(sp_c)) ')'], 'FontSize', 12)
-    
+    set(handles.black_axes,'Color',[0 0 0 ]);
+
