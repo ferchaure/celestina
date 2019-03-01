@@ -1,7 +1,12 @@
 celestina
 =========
 
-A graphical tool for the qualitative analysis of the merge operation in Wave_clus
+A graphical tool for the qualitative analysis of the merge operation in [Wave_clus](https://github.com/csn-le/wave_clus).
+
+
+How to use:
+
+Run celestina and load sorting data from "times_" files or Wave_clus gui in the same Matlab.
 
 Requirements:
 

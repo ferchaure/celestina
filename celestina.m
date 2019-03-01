@@ -425,12 +425,14 @@ end
 function update_figure(h)
     cl = unique(h.classes);
     cl = cl(cl>0);
+    text{1} = 'None'; %default value 
     for i=1:length(cl)
         text{i} = num2str(cl(i));
     end
+    set(h.ca_pm,'Value',1);
+    set(h.cb_pm,'Value',1);
     set(h.ca_pm,'String',text);
     set(h.cb_pm,'String',text);
-
     for i = h.ticks
         cla(i)
     end
